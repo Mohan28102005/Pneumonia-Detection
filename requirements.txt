@@ -1,7 +1,8 @@
 streamlit
-tensorflow
+numpy
+pandas
+plotly
 pydicom
 pillow
-numpy
-plotly
-pandas
+opencv-python-headless
+tensorflow==2.18.0
