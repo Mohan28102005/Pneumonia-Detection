@@ -1,8 +1,8 @@
-streamlit
-numpy
-pandas
-plotly
-pydicom
-pillow
-opencv-python-headless
-tensorflow==2.18.0
+streamlit==1.67.0
+numpy==1.26.4
+pandas==2.2.2
+plotly==6.5.0
+pydicom==3.0.1
+pillow==12.0.0
+opencv-python-headless==4.11.0.86
+tensorflow-cpu==2.18.0
