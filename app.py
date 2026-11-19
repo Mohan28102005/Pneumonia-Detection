@@ -9,7 +9,7 @@ import os
 import cv2
 
 # --- PAGE CONFIG ---
-st.set_page_config(page_title="PneumoScan AI", page_icon="🫁", layout="wide")
+st.set_page_config(page_title="PneumoScan AI", page_icon="D", layout="wide")
 
 # --- CUSTOM CSS ---
 st.markdown("""
@@ -53,6 +53,7 @@ MODEL_PATHS = {
     "bce": "models/bce_threshold/best_model.keras",
     "densenet": "models/densenet_clinical/best_model.keras"
 }
+INFERENCE_THRESHOLD = 0.50
 
 # --- INFERENCE BACKEND ---
 
@@ -155,9 +156,145 @@ def draw_bbox_on_image(pil_image, bbox, probability, threshold):
 
     return img_copy
 
+def render_data_flow(nodes, accent="#55d6be"):
+    """Render a compact, responsive vertical process diagram."""
+    items = []
+    for index, node in enumerate(nodes):
+        items.append(
+            f"<div class='data-flow-node'><div class='data-flow-index'>{index + 1:02d}</div>"
+            f"<div><strong>{node[0]}</strong><span>{node[1]}</span></div></div>"
+        )
+        if index < len(nodes) - 1:
+            items.append(f"<div class='data-flow-arrow' style='color:{accent}'>↓</div>")
+    st.markdown("<div class='data-flow'>" + "".join(items) + "</div>", unsafe_allow_html=True)
+
+def render_problem_illustration():
+    """Render an explicitly illustrative dual-output chest X-ray concept."""
+    st.markdown(
+        """
+        <div class="problem-illustration">
+          <div class="illustration-stage">
+            <div class="xray-art" role="img" aria-label="Illustrative chest X-ray with suspected region">
+              <div class="lung lung-left"></div><div class="lung lung-right"></div>
+              <div class="spine"></div><div class="rib rib-1"></div><div class="rib rib-2"></div>
+              <div class="rib rib-3"></div><div class="rib rib-4"></div>
+              <div class="suspected-region"></div>
+            </div>
+            <span class="illustration-label">Illustrative X-ray<br><small>not a model prediction</small></span>
+          </div>
+          <div class="illustration-arrow">→</div>
+          <div class="model-stage"><div class="model-icon">AI</div><strong>Deep learning<br>model</strong><small>shared visual features</small></div>
+          <div class="illustration-arrow">→</div>
+          <div class="output-stack">
+            <div class="output-card classification"><span>01</span><strong>Classification</strong><small>Pneumonia / Normal</small></div>
+            <div class="output-card localization"><span>02</span><strong>Localization</strong><small>Suspected region + box</small></div>
+          </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+def render_dataset_structure():
+    st.markdown(
+        """
+        <div class="structure-diagram">
+          <div class="structure-root">RSNA Pneumonia Detection Challenge</div>
+          <div class="structure-branches">
+            <div class="structure-branch"><b>DICOM image files</b><span>Chest X-ray pixel data<br>+ imaging metadata</span></div>
+            <div class="structure-branch"><b>Annotation CSV</b><span>Patient ID → target label<br>+ x, y, width, height</span></div>
+          </div>
+          <div class="structure-link">Patient ID connects one image record to its ground truth</div>
+          <div class="structure-record"><span>Patient ID</span><span>Target: 0 / 1</span><span>Box: x, y, w, h</span></div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+def render_data_styles():
+    st.markdown(
+        """
+        <style>
+        .section-kicker{color:#55d6be;text-transform:uppercase;letter-spacing:.14em;font-size:.72rem;font-weight:700;margin-bottom:.3rem}
+        .data-hero{background:linear-gradient(135deg,#202632 0%,#172b35 100%);border:1px solid #34505a;border-radius:16px;padding:24px 26px;margin:6px 0 20px}
+        .data-hero h2{margin:0 0 8px;color:#f4f7fa}.data-hero p{margin:0;color:#bac8d1;max-width:900px;line-height:1.55}
+        .problem-illustration{display:flex;align-items:center;justify-content:center;gap:18px;background:#171b22;border:1px solid #303a45;border-radius:14px;padding:22px;min-height:250px}
+        .illustration-stage{position:relative;text-align:center}.illustration-label{display:block;color:#9eabb5;font-size:.75rem;margin-top:8px}.illustration-label small{color:#e8a96a}
+        .xray-art{position:relative;width:158px;height:176px;border-radius:48% 48% 43% 43%;background:radial-gradient(ellipse at center,#a8c0c5 0,#55717b 34%,#253741 72%,#151c22 100%);overflow:hidden;box-shadow:0 0 20px #719ca966}
+        .lung{position:absolute;top:31px;width:52px;height:115px;border-radius:48% 48% 44% 44%;background:radial-gradient(ellipse at 42% 42%,#c9dce0 0,#7999a0 58%,#36505a 100%);opacity:.88}.lung-left{left:23px;transform:rotate(5deg)}.lung-right{right:23px;transform:rotate(-5deg)}
+        .spine{position:absolute;left:77px;top:25px;height:130px;width:5px;border-radius:5px;background:#d9e8e8aa}.rib{position:absolute;left:32px;width:94px;height:32px;border-top:2px solid #d5e4e355;border-radius:50%}.rib-1{top:43px}.rib-2{top:68px}.rib-3{top:93px}.rib-4{top:118px}
+        .suspected-region{position:absolute;left:37px;top:82px;width:42px;height:31px;border:3px solid #ff806b;border-radius:8px;box-shadow:0 0 12px #ff806b;background:#ff806b22}
+        .illustration-arrow{font-size:2rem;color:#55d6be}.model-stage{display:flex;flex-direction:column;align-items:center;text-align:center;color:#e9f2f4;gap:5px}.model-stage small,.output-card small{color:#9eabb5;font-size:.72rem}.model-icon{display:grid;place-items:center;width:64px;height:64px;border-radius:14px;background:#315a63;color:#70f0d7;font-weight:800;border:1px solid #55d6be;font-size:1.25rem}
+        .output-stack{display:grid;gap:10px;min-width:175px}.output-card{border-radius:10px;padding:11px 13px;border-left:4px solid;text-align:left;background:#222933}.output-card span{font-size:.68rem;color:#8da0aa;display:block}.output-card strong{display:block;color:#f4f7fa}.classification{border-color:#55d6be}.localization{border-color:#ff806b}
+        .metric-card{background:#202632;border:1px solid #35424e;border-radius:12px;padding:14px 16px;height:100%}.metric-card .metric-label{color:#9eabb5;font-size:.78rem}.metric-card .metric-value{font-size:1.45rem;font-weight:700;color:#f4f7fa;margin:4px 0}.metric-card .metric-note{font-size:.75rem;color:#55d6be}
+        .data-flow{display:flex;flex-direction:column;align-items:stretch;background:#171b22;border:1px solid #303a45;border-radius:14px;padding:14px 18px}.data-flow-node{display:flex;align-items:center;gap:13px;background:#222933;border:1px solid #35424e;border-radius:10px;padding:11px 14px}.data-flow-index{color:#55d6be;font-weight:700;font-size:.78rem}.data-flow-node strong{display:block;color:#f4f7fa}.data-flow-node span{display:block;color:#aab8c0;font-size:.78rem;margin-top:2px}.data-flow-arrow{text-align:center;font-size:1.2rem;line-height:1.35}
+        .structure-diagram{background:#171b22;border:1px solid #303a45;border-radius:14px;padding:20px;text-align:center}.structure-root{display:inline-block;background:#315a63;border:1px solid #55d6be;border-radius:10px;padding:12px 18px;color:#f4f7fa;font-weight:700}.structure-branches{display:flex;justify-content:center;gap:18px;margin:18px 0}.structure-branch{width:230px;background:#222933;border:1px solid #35424e;border-radius:10px;padding:12px;color:#f4f7fa}.structure-branch b{display:block;color:#70f0d7}.structure-branch span{display:block;color:#aab8c0;font-size:.78rem;line-height:1.5;margin-top:5px}.structure-link{color:#e8a96a;font-size:.8rem;margin:5px 0 13px}.structure-record{display:flex;justify-content:center;gap:8px;flex-wrap:wrap}.structure-record span{background:#2b3340;color:#dce7eb;border-radius:6px;padding:7px 10px;font-size:.76rem}
+        .imbalance-callout{background:#2b2325;border:1px solid #70454c;border-radius:12px;padding:16px;color:#d9c4c6;line-height:1.5}.imbalance-callout strong{color:#ff9b8e}
+        @media(max-width:800px){.problem-illustration{flex-wrap:wrap;gap:12px}.illustration-arrow{transform:rotate(90deg)}.structure-branches{flex-direction:column;align-items:center}.structure-branch{width:min(100%,300px)}}
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+def render_architecture_diagram():
+    st.markdown(
+        """
+        <style>
+        .architecture-diagram{background:linear-gradient(180deg,#171b22 0%,#13171d 100%);border:1px solid #303a45;border-radius:16px;padding:24px 20px 20px;margin:12px 0 24px}
+        .architecture-stage{display:flex;flex-direction:column;align-items:center}
+        .architecture-box{width:min(100%,620px);box-sizing:border-box;border:1px solid #40505d;border-radius:11px;background:#222933;padding:13px 18px;text-align:center;color:#f4f7fa;box-shadow:0 6px 16px #00000020}
+        .architecture-box .box-kicker{display:block;color:#70f0d7;font-size:.68rem;letter-spacing:.13em;text-transform:uppercase;font-weight:700;margin-bottom:4px}
+        .architecture-box .box-title{display:block;font-weight:700;font-size:1rem}
+        .architecture-box .box-detail{display:block;color:#aab8c0;font-size:.76rem;margin-top:4px}
+        .architecture-box.input{border-color:#55d6be;background:#1d343a}.architecture-box.backbone{border-color:#6f8de8;background:#252b45}.architecture-box.shared{border-color:#d29b5d;background:#382d24}
+        .architecture-arrow{height:30px;display:flex;align-items:center;justify-content:center;color:#55d6be;font-size:1.35rem;line-height:1}
+        .branch-label{font-size:.72rem;color:#aab8c0;text-align:center;margin:2px 0 10px;letter-spacing:.04em}
+        .architecture-branches{width:min(100%,820px);display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px;position:relative}
+        .architecture-branches:before{content:"";position:absolute;top:-11px;left:25%;right:25%;height:1px;background:#66737d}
+        .architecture-branch{position:relative;background:#222933;border:1px solid #40505d;border-radius:12px;padding:14px 15px 16px}
+        .architecture-branch:before{content:"";position:absolute;top:-12px;left:50%;height:12px;border-left:1px solid #66737d}
+        .architecture-branch.classification{border-top:3px solid #55d6be}.architecture-branch.localization{border-top:3px solid #ff806b}
+        .architecture-branch h4{margin:0 0 4px;color:#f4f7fa;font-size:.95rem}.architecture-branch p{margin:0 0 12px;color:#aab8c0;font-size:.75rem}
+        .branch-step{border-radius:8px;background:#2c3540;border:1px solid #3d4a55;padding:9px 10px;margin-top:8px;text-align:center;color:#e8f0f2;font-size:.78rem}
+        .branch-step strong{display:block;color:#f4f7fa}.branch-step span{display:block;color:#aab8c0;font-size:.7rem;margin-top:3px}
+        .branch-output{margin-top:12px;border-radius:8px;padding:11px;text-align:center;font-weight:700;font-size:.82rem}.classification .branch-output{background:#1d403d;color:#70f0d7}.localization .branch-output{background:#432d31;color:#ff9b8e}
+        .architecture-legend{display:flex;justify-content:center;gap:18px;flex-wrap:wrap;margin-top:18px;color:#aab8c0;font-size:.72rem}.architecture-legend span:before{content:"";display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;background:#55d6be}.architecture-legend span:last-child:before{background:#ff806b}
+        @media(max-width:650px){.architecture-branches{grid-template-columns:1fr}.architecture-branches:before{display:none}.architecture-branch:before{display:none}}
+        </style>
+        <div class="architecture-diagram">
+          <div class="architecture-stage">
+            <div class="architecture-box input"><span class="box-kicker">Input</span><span class="box-title">Chest X-ray</span><span class="box-detail">H × W × 3 &nbsp;|&nbsp; normalized grayscale copied across RGB channels</span></div>
+            <div class="architecture-arrow">↓</div>
+            <div class="architecture-box backbone"><span class="box-kicker">Feature extractor</span><span class="box-title">EfficientNetB0 / DenseNet121 backbone</span><span class="box-detail">ImageNet-pretrained convolutional features</span></div>
+            <div class="architecture-arrow">↓</div>
+            <div class="architecture-box shared"><span class="box-kicker">Shared representation</span><span class="box-title">GlobalAveragePooling → BatchNorm → Dense → Dropout</span><span class="box-detail">One compact feature vector feeds both task-specific heads</span></div>
+            <div class="architecture-arrow">↓</div>
+            <div class="branch-label">shared features split into two outputs</div>
+            <div class="architecture-branches">
+              <div class="architecture-branch classification">
+                <h4>Classification head</h4><p>Answers: “Is pneumonia present?”</p>
+                <div class="branch-step"><strong>Dense</strong><span>task-specific features</span></div>
+                <div class="branch-step"><strong>Dropout</strong><span>regularization during training</span></div>
+                <div class="branch-step"><strong>Dense(1, sigmoid)</strong><span>one probability between 0 and 1</span></div>
+                <div class="branch-output">Pneumonia probability</div>
+              </div>
+              <div class="architecture-branch localization">
+                <h4>Localization head</h4><p>Answers: “Where is it?”</p>
+                <div class="branch-step"><strong>Dense</strong><span>task-specific features</span></div>
+                <div class="branch-step"><strong>Dropout</strong><span>regularization during training</span></div>
+                <div class="branch-step"><strong>Dense(4, sigmoid)</strong><span>four normalized values in [0, 1]</span></div>
+                <div class="branch-output">[x, y, width, height]</div>
+              </div>
+            </div>
+          </div>
+          <div class="architecture-legend"><span>classification pathway</span><span>localization pathway</span></div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
 # --- SIDEBAR ---
 with st.sidebar:
-    st.title("🫁 PneumoScan AI")
+    st.title(" PneumoScan AI")
     st.markdown("""
     A dual-output deep learning model that classifies pneumonia and localizes
     it on the X-ray, trained on the RSNA Pneumonia Detection Challenge dataset.
@@ -179,73 +316,166 @@ tabs = st.tabs([
 tab_data, tab_arch, tab_loss, tab_train, tab_eval, tab_infer = tabs
 
 # ============================================================
-# 02 · DATA
+# 01 · DATA
 # ============================================================
 with tab_data:
-    st.header("Problem & dataset")
+    render_data_styles()
+    st.markdown("<div class='section-kicker'>01 / Data foundation</div>", unsafe_allow_html=True)
     st.markdown(
-        "Pneumonia is a lung infection, diagnosed from chest X-rays. The model has two "
-        "jobs: **classify** (pneumonia / normal) and **localize** (draw the box)."
+        "<div class='data-hero'><h2>From chest X-ray to clinical signal</h2>"
+        "<p>PneumoScan AI is designed as a screening support system: it helps surface "
+        "suspicious studies for human review, rather than replacing clinical judgment. "
+        "The data story is a two-task problem — recognize <b>what</b> is present and "
+        "show <b>where</b> it may be present.</p></div>",
+        unsafe_allow_html=True,
     )
 
-    st.subheader("Dataset — RSNA Pneumonia Detection Challenge")
-    dataset_df = pd.DataFrame({
-        "Metric": ["Total patients", "Pneumonia", "Normal", "Split", "Source format"],
-        "Value": [
-            "~26,684",
-            "~9,000 (33%)",
-            "~17,684 (67%)",
-            "85% train / 15% val, stratified by patient",
-            "DICOM (.dcm) — the standard medical imaging file format",
-        ],
-    })
-    st.table(dataset_df.set_index("Metric"))
-
-    st.subheader("How the labels were built")
-    st.markdown("""
-- Some patients have **multiple** bounding boxes (more than one infected region).
-- These get merged into a single box using min/max coordinates across all boxes for that
-  patient — simplifies the target, at the cost of losing "multiple distinct regions"
-  information (a fair limitation to mention if asked).
-- Box coordinates are normalized to **[0, 1]** by dividing by the original image size
-  (1024px), so the model predicts scale-independent coordinates.
-    """)
-
-    st.subheader("Why 33% / 67% matters")
-    st.info(
-        "That's a real but moderate class imbalance (roughly 2:1). Not extreme, but "
-        "enough that a naive model could get decent accuracy by mostly predicting "
-        "\"normal\" — which is exactly the failure mode you don't want in a screening "
-        "tool. This is why so much of the project's design (loss functions, "
-        "oversampling) is built around handling that imbalance in favor of catching "
-        "positives."
+    st.subheader("What problem are we solving?")
+    st.markdown(
+        "Pneumonia is a lung infection that can appear on chest radiographs. Reviewing "
+        "large volumes of X-rays is time-consuming, so an automated first pass can help "
+        "medical professionals prioritize suspicious cases for closer examination."
     )
+    render_problem_illustration()
+
+    st.subheader("The RSNA dataset at a glance")
+    st.markdown(
+        "**RSNA** is the Radiological Society of North America. The RSNA Pneumonia "
+        "Detection Challenge dataset is used here because it pairs chest X-ray studies "
+        "with radiologist-derived pneumonia annotations. Each DICOM contains grayscale "
+        "pixel data plus imaging metadata; the annotation CSV connects a patient/image "
+        "identifier to a label and, for positive cases, box coordinates."
+    )
+    metric_cols = st.columns(4)
+    metrics = [
+        ("26,684", "total patients", "documented project figure"),
+        ("~9,000", "pneumonia", "≈33% of patients"),
+        ("~17,684", "normal", "≈67% of patients"),
+        ("85 / 15", "train / validation", "patient-level, stratified"),
+    ]
+    for col, (value, label, note) in zip(metric_cols, metrics):
+        col.markdown(
+            f"<div class='metric-card'><div class='metric-label'>{label}</div>"
+            f"<div class='metric-value'>{value}</div><div class='metric-note'>{note}</div></div>",
+            unsafe_allow_html=True,
+        )
+
+    chart_col, explanation_col = st.columns([1.15, 1])
+    with chart_col:
+        distribution = go.Figure(
+            go.Pie(
+                labels=["Normal", "Pneumonia"],
+                values=[67, 33],
+                hole=0.68,
+                marker=dict(colors=["#4b6470", "#ff806b"], line=dict(color="#171b22", width=4)),
+                textinfo="label+percent",
+                textfont=dict(color="#f4f7fa", size=13),
+                hovertemplate="%{label}: %{percent}<extra></extra>",
+            )
+        )
+        distribution.update_layout(
+            title=dict(text="Patient-level class distribution", font=dict(size=16, color="#f4f7fa")),
+            annotations=[dict(text="26,684<br><span style='font-size:11px'>patients</span>", x=0.5, y=0.5, showarrow=False, font=dict(color="#f4f7fa", size=18))],
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
+            margin=dict(t=55, b=10, l=10, r=10),
+            height=330,
+            showlegend=False,
+        )
+        st.plotly_chart(distribution, use_container_width=True, config={"displayModeBar": False})
+    with explanation_col:
+        st.markdown("#### Why DICOM instead of JPG/PNG?")
+        st.markdown(
+            "DICOM is the clinical imaging standard. Unlike a screenshot, it preserves "
+            "pixel data alongside acquisition metadata and a consistent study identity. "
+            "The current inference path reads `pixel_array`, applies rescale slope/intercept "
+            "when available, handles MONOCHROME1 inversion, then normalizes to 0–255."
+        )
+
+    st.subheader("How the dataset is organized")
+    render_dataset_structure()
+
+    st.subheader("From annotation to training target")
+    render_data_flow([
+        ("Original chest X-ray", "DICOM pixel array and patient/image identifier"),
+        ("Annotation CSV", "Find the matching patient/image record"),
+        ("Identify pneumonia annotations", "Positive rows carry one or more regions"),
+        ("Extract box coordinates", "x, y, width, height from the annotation"),
+        ("Create two targets", "binary class label + localization target"),
+        ("Training-ready sample", "normalized image tensor and target dictionary"),
+    ], accent="#ff806b")
+    st.markdown(
+        "A patient may have multiple boxes. The documented project convention merges "
+        "them with the minimum x/y and maximum right/bottom extents. This produces one "
+        "simple target box, but it loses the distinction between separate infected regions."
+    )
+    label_col, caveat_col = st.columns(2)
+    with label_col:
+        st.markdown("**Coordinate convention**")
+        st.code("x_norm = x / image_width\ny_norm = y / image_height\nw_norm = width / image_width\nh_norm = height / image_height", language="python")
+
+    st.subheader("Why class imbalance matters")
+    imbalance_col, baseline_col = st.columns([1.1, 1])
+    with imbalance_col:
+        st.markdown(
+            "Approximately two thirds of the documented patients are normal. A model "
+            "that predicts **Normal for every study** could appear to achieve roughly "
+            "**67% accuracy**, while detecting **0% of pneumonia cases**. For a screening "
+            "workflow, that false sense of performance is unacceptable: recall, AUC, "
+            "precision, and the false-negative trade-off matter more than accuracy alone."
+        )
+        st.markdown("<div class='imbalance-callout'><strong>Screening principle:</strong> a missed positive can delay care; the operating threshold should be chosen with that clinical cost in mind.</div>", unsafe_allow_html=True)
+    with baseline_col:
+        baseline = go.Figure(go.Bar(
+            x=["All Normal baseline", "Pneumonia detected"],
+            y=[67, 0],
+            marker_color=["#4b6470", "#ff806b"],
+            text=["67% accuracy", "0% recall"],
+            textposition="auto",
+        ))
+        baseline.update_layout(
+            title="Why accuracy alone misleads",
+            yaxis=dict(range=[0, 75], title="Percent"),
+            paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+            font=dict(color="#dce7eb"), margin=dict(t=50, b=25, l=35, r=10), height=280,
+        )
+        st.plotly_chart(baseline, use_container_width=True, config={"displayModeBar": False})
+
+    st.subheader("Patient-level train / validation split")
+    render_data_flow([
+        ("Complete dataset", "≈26,684 documented patients"),
+        ("Patient-level stratified split", "Keep each patient in one partition; preserve class ratio"),
+        ("Training: 85%", "Learn model parameters from labeled examples"),
+        ("Validation: 15%", "Estimate generalization during development"),
+    ])
+    st.markdown(
+        "Patient-level splitting prevents leakage: if multiple studies from one patient "
+        "land in both partitions, the model may memorize patient-specific appearance "
+        "instead of learning pneumonia patterns. Stratification keeps the approximate "
+        "33% / 67% class balance comparable across training and validation. Exact sample "
+        "counts are unavailable because the split artifact is not included."
+    )
+
+    st.subheader("Complete data pipeline")
+    render_data_flow([
+        ("RSNA dataset", "DICOM images + annotation records"),
+        ("DICOM image loading", "Read pixel_array and relevant metadata"),
+        ("Image preprocessing", "Rescale,CLAHE, invert MONOCHROME1, normalize, resize to 160×160, stack to 3 channels"),
+        ("Annotation processing", "Map patient IDs and consolidate positive boxes"),
+        ("Two training targets", "Pneumonia/Normal + normalized bounding box"),
+        ("Patient-level split", "85% train / 15% validation, stratified"),
+        ("Training-ready dataset", "Image tensor paired with both targets"),
+        ("Deep learning model", "Shared backbone with classification and localization heads"),
+    ], accent="#55d6be")
+    st.success("Next: Architecture shows how the shared visual representation branches into the classification and localization heads.")
 
 # ============================================================
 # 03 · ARCHITECTURE
 # ============================================================
 with tab_arch:
     st.header("Model architecture")
-    st.markdown(
-        "One shared backbone, two task-specific \"heads\" branching off the top. Same "
-        "structure was reused across all three experiments — only the backbone and head "
-        "sizes changed."
-    )
+    render_architecture_diagram()
 
-    st.code(
-        "Input image (H × W × 3)\n"
-        "        ↓\n"
-        "Backbone (EfficientNet or DenseNet121, pretrained on ImageNet)\n"
-        "        ↓\n"
-        "GlobalAveragePooling → BatchNorm → Dense(shared) → Dropout\n"
-        "        ↓ splits into two heads ↓\n"
-        "Classification head              Localization head\n"
-        "Dense → Dropout → Dense(1, sigmoid)   Dense → Dropout → Dense(4, sigmoid)\n"
-        "→ pneumonia probability                → [x, y, w, h] box",
-        language=None,
-    )
-
-    st.subheader("Plain-English explanation of each piece")
     with st.expander("Backbone"):
         st.write(
             "A network pretrained on millions of natural images (ImageNet). It already "
@@ -362,7 +592,7 @@ with tab_loss:
 with tab_train:
     st.header("Training strategy")
 
-    st.subheader("Two-phase transfer learning (used in all 3 experiments)")
+    st.subheader("Two-phase transfer learning")
     c1, c2 = st.columns(2)
     with c1:
         st.markdown("**Phase 1 — warmup**")
@@ -516,7 +746,7 @@ with tab_infer:
     active_model_key = "bce"
     img_size = 160
 
-    st.info("Using model: BCE + Threshold (EfficientNetB0, 160px)")
+    st.info("Using model: BCE + validation-selected threshold (160px)")
     st.info("Upload a DICOM file to test the model.")
     uploaded_file = st.file_uploader("Upload Chest X-Ray (.dcm)", type=["dcm"])
 
@@ -560,10 +790,9 @@ with tab_infer:
 
         with col2:
             st.subheader("Inference Results")
-            threshold = st.slider("Prediction Threshold", min_value=0.10, max_value=0.90, value=0.50, step=0.05)
-
             prob = st.session_state.last_prob
             bbox = st.session_state.last_bbox
+            threshold = INFERENCE_THRESHOLD
 
             # Confidence logic
             distance = abs(prob - threshold)
@@ -581,9 +810,8 @@ with tab_infer:
             # Metrics
             st.markdown(f"**Prediction:** <span class='{pred_class}'>{pred_text}</span>", unsafe_allow_html=True)
             st.metric("Pneumonia Probability", f"{prob:.1%}")
+            st.metric("Decision Threshold", f"{threshold:.0%}", "fixed validation-selected cutoff")
             st.metric("Confidence", confidence)
-
-            st.progress(prob, text="Probability Score")
 
             if is_pneumonia and sum(bbox) > 0:
                 st.info(f"Bounding Box (Normalized):\n`[{bbox[0]:.2f}, {bbox[1]:.2f}, {bbox[2]:.2f}, {bbox[3]:.2f}]`\n\nThe bounding box highlights the localized area of suspected pneumonia.")
